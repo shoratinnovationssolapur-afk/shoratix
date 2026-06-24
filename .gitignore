@@ -6,7 +6,10 @@ ui-debug.log
 
 # FlutterFire generated files (optional)
 lib/firebase_options.dart
-
+/build/
+.dart_tool/
+.idea/
+.gradle/
 # Environment files
 .env
 .env.*
