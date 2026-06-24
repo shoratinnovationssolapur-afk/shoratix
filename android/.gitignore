@@ -1,0 +1,104 @@
+# Miscellaneous
+
+*.class
+*.log
+*.pyc
+*.swp
+*.tmp
+*.temp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ / Android Studio
+
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# VS Code
+
+.vscode/
+
+# Flutter / Dart / Pub
+
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub/
+.pub-cache/
+/build/
+/coverage/
+**/doc/api/
+**/ios/Flutter/.last_build_id
+
+# Generated files
+
+GeneratedPluginRegistrant.java
+
+# Firebase logs
+
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+
+# Android
+
+.gradle/
+/captures/
+/android/app/debug
+/android/app/profile
+/android/app/release
+.cxx/
+
+# Local configuration
+
+local.properties
+
+# Environment files
+
+.env
+.env.*
+
+# Crashlytics
+
+crashlytics-build.properties
+
+# Symbolication
+/build/
+.dart_tool/
+.idea/
+.gradle/
+
+app.*.symbols
+
+# Obfuscation
+
+app.*.map.json
+
+# Keystore files (DO NOT COMMIT)
+
+key.properties
+*.keystore
+*.jks
+**/*.keystore
+**/*.jks
+
+# macOS ephemeral files
+
+macos/Flutter/ephemeral/
+
+# Linux ephemeral files
+
+linux/flutter/ephemeral/
+
+# Windows ephemeral files
+
+windows/flutter/ephemeral/
