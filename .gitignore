@@ -1,0 +1,45 @@
+# Firebase
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+
+# FlutterFire generated files (optional)
+lib/firebase_options.dart
+
+# Environment files
+.env
+.env.*
+
+# VS Code
+.vscode/
+
+# Generated plugin registrant
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Crashlytics
+crashlytics-build.properties
+
+# Keystore files (don't commit secrets)
+*.jks
+*.keystore
+key.properties
+
+# macOS
+macos/Flutter/ephemeral/
+
+# Windows
+windows/flutter/ephemeral/
+
+# Linux
+linux/flutter/ephemeral/
+
+# Generated files
+*.lock
+.pub/
+.pub-cache/
+
+# Temporary files
+*.tmp
+*.temp
