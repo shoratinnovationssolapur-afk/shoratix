@@ -5,12 +5,14 @@ import '../services/auth_service.dart';
 import '../models/student_model.dart';
 import '../models/trainer_model.dart';
 import '../services/database_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Added for direct registration routing if needed
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 class UserAuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
   final DatabaseService _dbService = DatabaseService();
-  
+  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
+
   User? _user;
   StudentModel? _studentModel;
   TrainerModel? _trainerModel;
@@ -38,25 +40,41 @@ class UserAuthProvider with ChangeNotifier {
   }
 
   Future<void> _loadUserData(String uid) async {
-    // Skip loading for debug IDs
     if (uid == 'debug_trainer_id' || uid == 'debug_student_id') return;
 
-    _userRole = await _dbService.getUserRole(uid);
-    if (_userRole == 'student') {
-      _dbService.getStudentData(uid).listen((student) {
-        _studentModel = student;
-        try {
-          FirebaseMessaging.instance.subscribeToTopic('branch_${student.branch}');
-        } catch (_) {}
-        notifyListeners();
-      });
-    } else if (_userRole == 'trainer') {
-      _dbService.getTrainerData(uid).listen((trainer) {
-        if (trainer != null) {
-          _trainerModel = trainer;
+    try {
+      print("🔍 DB LOG: Fetching user role for UID: $uid");
+      _userRole = await _dbService.getUserRole(uid);
+      print("🔍 DB LOG: User role found: $_userRole");
+
+      if (_userRole == 'student') {
+        _dbService.getStudentData(uid).listen((student) {
+          print("🔍 DB LOG: Student profile loaded into provider state!");
+          _studentModel = student;
+          try {
+            FirebaseMessaging.instance.subscribeToTopic('branch_${student.branch}');
+          } catch (_) {}
           notifyListeners();
-        }
-      });
+        }, onError: (error) {
+          print("❌ DB STREAM ERROR (Student): $error");
+        });
+      } else if (_userRole == 'trainer') {
+        _dbService.getTrainerData(uid).listen((trainer) {
+          if (trainer != null) {
+            print("🔍 DB LOG: Trainer profile loaded into provider state!");
+            _trainerModel = trainer;
+            notifyListeners();
+          }
+        }, onError: (error) {
+          print("❌ DB STREAM ERROR (Trainer): $error");
+        });
+      } else {
+        print("⚠️ DB WARNING: User role is empty or unknown! Forcing notification update.");
+        notifyListeners(); // Prevents dashboard from locking up if role doesn't resolve
+      }
+    } catch (e) {
+      print("❌ CRITICAL ERROR IN AUTH DATA LOADING: $e");
+      notifyListeners();
     }
   }
 
@@ -67,14 +85,13 @@ class UserAuthProvider with ChangeNotifier {
     final email = identifier.trim().toLowerCase();
     final pwd = password.trim();
 
-    // GLOBAL BYPASS LOGIC
     if (expectedRole == 'trainer' && email == 'trainer@shorat.com' && pwd == 'trainer123') {
       setDebugTrainer(branch);
       _isLoading = false;
       notifyListeners();
       return null;
     }
-    
+
     if (expectedRole == 'student' && (email == 'student@shorat.com' || email == 'sh-debug') && pwd == 'student123') {
       setDebugStudent(branch);
       _isLoading = false;
@@ -84,7 +101,7 @@ class UserAuthProvider with ChangeNotifier {
 
     try {
       String finalEmail = email;
-      
+
       if (!identifier.contains('@')) {
         final student = await _dbService.getStudentByStudentId(identifier);
         if (student == null) {
@@ -96,7 +113,7 @@ class UserAuthProvider with ChangeNotifier {
       }
 
       UserCredential? result = await _authService.signIn(finalEmail, pwd).timeout(const Duration(seconds: 15));
-      
+
       if (result?.user != null) {
         String actualRole = await _dbService.getUserRole(result!.user!.uid);
         if (actualRole != expectedRole) {
@@ -126,14 +143,59 @@ class UserAuthProvider with ChangeNotifier {
     }
   }
 
-  Future<String?> register(String email, String password, StudentModel student) async {
+  /// Dynamic Registration Engine
+  /// Accepts either StudentModel or TrainerModel payloads seamlessly
+  Future<String?> register(String email, String password, dynamic userModel) async {
     _isLoading = true;
     notifyListeners();
     try {
-      await _authService.register(email, password, student).timeout(const Duration(seconds: 15));
+      // 1. Create the credentials record inside Firebase Auth account management
+      UserCredential credential = await _firebaseAuth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final String uid = credential.user!.uid;
+
+      // 2. Extract specific model configurations dynamically
+      if (userModel is StudentModel) {
+        StudentModel adjustedStudent = StudentModel(
+          uid: uid,
+          name: userModel.name,
+          email: userModel.email,
+          phone: userModel.phone,
+          studentId: userModel.studentId,
+          branch: userModel.branch,
+          role: 'student',
+          enrolledCourses: userModel.enrolledCourses,
+        );
+
+        // Save using your existing database management service rules
+        await FirebaseFirestore.instance.collection('users').doc(uid).set(adjustedStudent.toMap());
+        _studentModel = adjustedStudent;
+        _userRole = 'student';
+      } else if (userModel is TrainerModel) {
+        TrainerModel adjustedTrainer = TrainerModel(
+          uid: uid,
+          name: userModel.name,
+          email: userModel.email,
+          branch: userModel.branch,
+          role: 'trainer',
+        );
+
+        // Save trainer details under the unified metadata document system mapping
+        await FirebaseFirestore.instance.collection('users').doc(uid).set(adjustedTrainer.toMap());
+        _trainerModel = adjustedTrainer;
+        _userRole = 'trainer';
+      }
+
       _isLoading = false;
       notifyListeners();
-      return null;
+      return null; // Registration success
+    } on FirebaseAuthException catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      return e.message ?? "An error occurred during registration.";
     } catch (e) {
       _isLoading = false;
       notifyListeners();

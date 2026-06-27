@@ -1,26 +1,36 @@
 {
   "project_info": {
-    "project_number": "816532346178",
-    "project_id": "shorat-student-hub",
-    "storage_bucket": "shorat-student-hub.firebasestorage.app"
+    "project_number": "289314175773",
+    "project_id": "shoratix",
+    "storage_bucket": "shoratix.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:816532346178:android:12f4e6a345cee786b9e4db",
+        "mobilesdk_app_id": "1:289314175773:android:1e9663d203b5aa8886bff4",
         "android_client_info": {
           "package_name": "com.shorat.shorat_student_hub"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "289314175773-9poigigjmgh49ksi9g7oe58tih0j0scf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyBGvGR-sp_V-Le_HZ6a3sVwbqDBCprhs7g"
+          "current_key": "AIzaSyCeWErNGT2uE9Qp7IndEc234io6DtHLiPg"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "289314175773-9poigigjmgh49ksi9g7oe58tih0j0scf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

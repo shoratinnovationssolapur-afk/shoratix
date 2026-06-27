@@ -29,11 +29,28 @@ class DatabaseService {
 
   // Check user role
   Future<String> getUserRole(String uid) async {
-    final studentDoc = await studentCollection.doc(uid).get();
-    if (studentDoc.exists) return 'student';
-    final trainerDoc = await trainerCollection.doc(uid).get();
-    if (trainerDoc.exists) return 'trainer';
-    return 'unknown';
+    try {
+      print("🎯 DB DEBUG: Looking up role in 'users' collection for UID: $uid");
+
+      // Target the absolute exact document reference path
+      DocumentSnapshot doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data() as Map<String, dynamic>;
+        final String role = data['role'] ?? 'student';
+        print("🎯 DB DEBUG: Match found! Role string parsed: $role");
+        return role;
+      }
+
+      print("⚠️ DB DEBUG: Document does not exist in 'users' collection for UID: $uid");
+      return 'unknown';
+    } catch (e) {
+      print("❌ DB DEBUG: getUserRole crashed with error: $e");
+      return 'unknown';
+    }
   }
 
   // Get Trainer Data
