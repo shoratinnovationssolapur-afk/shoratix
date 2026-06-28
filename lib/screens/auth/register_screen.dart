@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/student_model.dart';
-import '../../models/trainer_model.dart'; // Make sure you have your trainer model imported
+import '../../models/trainer_model.dart';
 import '../../routes/app_routes.dart';
 import '../../services/database_service.dart';
 
@@ -69,6 +69,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final password = _passwordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
 
+    // Field verification checks depending strictly on selected roles
     if (name.isEmpty || email.isEmpty || password.isEmpty || (_selectedRole == "Student" && phone.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please fill in all required fields")));
       return;
@@ -80,28 +81,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     final auth = Provider.of<UserAuthProvider>(context, listen: false);
-    final db = DatabaseService();
     String? error;
 
-    // Route payloads strictly by user role schemas
     if (_selectedRole == "Student") {
-      String finalId = await db.getNextStudentId();
-
       StudentModel newStudent = StudentModel(
         uid: '',
         name: name,
         email: email,
         phone: phone,
-        studentId: finalId,
+        studentId: _generatedStudentId, // Reuses pre-fetched ID instantly
         branch: "Computer Science",
         role: "student",
         enrolledCourses: [],
       );
 
-      // Pass the student model to your auth provider
       error = await auth.register(email, password, newStudent);
     } else {
-      // Build trainer instance matching your explicit properties exactly
       TrainerModel newTrainer = TrainerModel(
         uid: '',
         name: name,
@@ -110,7 +105,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         role: "trainer",
       );
 
-      // Pass the trainer model to your primary unified register method
       error = await auth.register(email, password, newTrainer);
     }
 
@@ -218,8 +212,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           const SizedBox(height: 18),
                           _buildInputField(_emailController, "Email Address", Icons.alternate_email),
                           const SizedBox(height: 18),
-                          _buildInputField(_phoneController, "Phone Number", Icons.phone_android_rounded, keyboardType: TextInputType.phone),
-                          const SizedBox(height: 18),
+
+                          // Conditional layout logic drops input field for trainers instantly
+                          if (_selectedRole == "Student") ...[
+                            _buildInputField(_phoneController, "Phone Number", Icons.phone_android_rounded, keyboardType: TextInputType.phone),
+                            const SizedBox(height: 18),
+                          ],
+
                           _buildInputField(_passwordController, "Password", Icons.lock_open_rounded, isPassword: true),
                           const SizedBox(height: 18),
                           _buildInputField(_confirmPasswordController, "Confirm Password", Icons.verified_user_outlined, isPassword: true),

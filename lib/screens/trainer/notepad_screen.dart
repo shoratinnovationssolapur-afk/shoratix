@@ -72,7 +72,7 @@ class _NotepadScreenState extends State<NotepadScreen> {
       // 1. If a file is attached, process upload through Cloudinary first
       if (_attachedFile != null) {
         bool isVideo = _attachedFile!.path.endsWith('.mp4');
-        attachmentUrl = await CloudinaryService.uploadMedia(_attachedFile!, isVideo: isVideo);
+        attachmentUrl = await CloudinaryService.uploadMedia(_attachedFile!);
       }
 
       // 2. Build map payload matching your architecture parameters

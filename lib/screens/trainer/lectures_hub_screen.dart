@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../providers/auth_provider.dart';
 import '../../services/database_service.dart';
+import '../../services/cloudinary_service.dart'; // 🎉 Imported Cloudinary Service
 
 class LecturesHubScreen extends StatelessWidget {
   const LecturesHubScreen({super.key});
@@ -116,16 +117,14 @@ class LecturesHubScreen extends StatelessWidget {
     final auth = Provider.of<UserAuthProvider>(context, listen: false);
     if (auth.user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Sign in with a real trainer account to upload videos."),
-        ),
+        const SnackBar(content: Text("Sign in with a real trainer account to upload videos.")),
       );
       return;
     }
 
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.video,
-      withData: kIsWeb, // Required for web
+      withData: kIsWeb,
     );
 
     if (result != null) {
@@ -148,72 +147,81 @@ class LecturesHubScreen extends StatelessWidget {
     if (auth.trainerModel != null) branchController.text = auth.trainerModel!.branch;
 
     showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        bool isUploading = false;
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text("Upload Video Lecture"),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!isUploading) ...[
-                    TextField(controller: titleController, decoration: const InputDecoration(labelText: "Lecture Title")),
-                    TextField(controller: branchController, decoration: const InputDecoration(labelText: "Branch")),
-                  ] else ...[
-                    const CircularProgressIndicator(color: Color(0xFFFF5252)),
-                    const SizedBox(height: 10),
-                    const Text("Uploading video... This may take a while."),
-                  ]
-                ],
-              ),
-              actions: isUploading ? [] : [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (titleController.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter a title")));
-                      return;
-                    }
-                    
-                    setDialogState(() => isUploading = true);
-                    try {
-                      final downloadUrl = await DatabaseService().uploadFile(
-                        fileData, 
-                        'lectures',
-                        fileName: "${DateTime.now().millisecondsSinceEpoch}_$fileName"
-                      );
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          bool isUploading = false;
+          return StatefulBuilder(
+              builder: (context, setDialogState) {
+                return AlertDialog(
+                  title: const Text("Upload Video Lecture"),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!isUploading) ...[
+                        TextField(controller: titleController, decoration: const InputDecoration(labelText: "Lecture Title")),
+                        TextField(controller: branchController, decoration: const InputDecoration(labelText: "Branch")),
+                      ] else ...[
+                        const CircularProgressIndicator(color: Color(0xFFFF5252)),
+                        const SizedBox(height: 10),
+                        const Text("Uploading video to Cloudinary..."),
+                      ]
+                    ],
+                  ),
+                  actions: isUploading ? [] : [
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+                    ElevatedButton(
+                      onPressed: () async {
+                        if (titleController.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter a title")));
+                          return;
+                        }
 
-                      final lectureData = {
-                        'title': titleController.text.trim(),
-                        'type': 'recorded',
-                        'url': downloadUrl,
-                        'branch': branchController.text.trim(),
-                        'date': DateTime.now().toIso8601String(),
-                        'trainerId': auth.trainerModel?.uid ?? '',
-                      };
-                      await DatabaseService().postLecture(lectureData);
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Video uploaded successfully!")));
-                      }
-                    } catch (e) {
-                      setDialogState(() => isUploading = false);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
-                      }
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
-                  child: const Text("Upload"),
-                ),
-              ],
-            );
-          }
-        );
-      }
+                        if (kIsWeb) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Web direct upload via file pathways is not supported on this preset.")),
+                          );
+                          return;
+                        }
+
+                        setDialogState(() => isUploading = true);
+                        try {
+                          // 🚀 Routes file through your unified Cloudinary engine cleanly
+                          final String? downloadUrl = await CloudinaryService.uploadMedia(fileData as File);
+
+                          if (downloadUrl == null) {
+                            throw Exception("Cloudinary rejected your video upload payload constraint references.");
+                          }
+
+                          final lectureData = {
+                            'title': titleController.text.trim(),
+                            'type': 'recorded',
+                            'url': downloadUrl,
+                            'branch': branchController.text.trim().isEmpty ? 'all' : branchController.text.trim(),
+                            'date': DateTime.now().toIso8601String(),
+                            'trainerId': auth.trainerModel?.uid ?? '',
+                          };
+
+                          await DatabaseService().postLecture(lectureData);
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Video uploaded successfully to Cloudinary!")));
+                          }
+                        } catch (e) {
+                          setDialogState(() => isUploading = false);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+                      child: const Text("Upload"),
+                    ),
+                  ],
+                );
+              }
+          );
+        }
     );
   }
 
@@ -232,68 +240,68 @@ class LecturesHubScreen extends StatelessWidget {
       context: context,
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          bool isUploading = false;
-          return AlertDialog(
-            title: const Text("Upload Lecture"),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!isUploading) ...[
-                  TextField(controller: titleController, decoration: const InputDecoration(labelText: "Lecture Title")),
-                  TextField(controller: linkController, decoration: const InputDecoration(labelText: "Video URL (YouTube/Drive)")),
-                  TextField(controller: branchController, decoration: const InputDecoration(labelText: "Branch")),
-                ] else ...[
-                  const CircularProgressIndicator(color: Color(0xFFFF5252)),
-                  const SizedBox(height: 10),
-                  const Text("Posting lecture..."),
-                ]
-              ],
-            ),
-            actions: isUploading ? [] : [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-              ElevatedButton(
-                onPressed: () async {
-                  if (titleController.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter a title")));
-                    return;
-                  }
-                  if (linkController.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter the URL")));
-                    return;
-                  }
-
-                  setDialogState(() => isUploading = true);
-                  try {
-                    final lectureData = {
-                      'title': titleController.text.trim(),
-                      'url': linkController.text.trim(),
-                      'branch': branchController.text.trim(),
-                      'type': 'recorded',
-                      'date': DateTime.now().toIso8601String(),
-                      'trainerId': trainer?.uid ?? '',
-                    };
-
-                    await DatabaseService().postLecture(lectureData);
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Lecture uploaded successfully!")),
-                      );
-                    }
-                  } catch (e) {
-                    setDialogState(() => isUploading = false);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
-                    }
-                  }
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
-                child: const Text("Upload"),
+          builder: (context, setDialogState) {
+            bool isUploading = false;
+            return AlertDialog(
+              title: const Text("Upload Lecture"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!isUploading) ...[
+                    TextField(controller: titleController, decoration: const InputDecoration(labelText: "Lecture Title")),
+                    TextField(controller: linkController, decoration: const InputDecoration(labelText: "Video URL (YouTube/Drive)")),
+                    TextField(controller: branchController, decoration: const InputDecoration(labelText: "Branch")),
+                  ] else ...[
+                    const CircularProgressIndicator(color: Color(0xFFFF5252)),
+                    const SizedBox(height: 10),
+                    const Text("Posting lecture..."),
+                  ]
+                ],
               ),
-            ],
-          );
-        }
+              actions: isUploading ? [] : [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (titleController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter a title")));
+                      return;
+                    }
+                    if (linkController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter the URL")));
+                      return;
+                    }
+
+                    setDialogState(() => isUploading = true);
+                    try {
+                      final lectureData = {
+                        'title': titleController.text.trim(),
+                        'url': linkController.text.trim(),
+                        'branch': branchController.text.trim().isEmpty ? 'all' : branchController.text.trim(),
+                        'type': 'recorded',
+                        'date': DateTime.now().toIso8601String(),
+                        'trainerId': trainer?.uid ?? '',
+                      };
+
+                      await DatabaseService().postLecture(lectureData);
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Lecture link posted successfully!")),
+                        );
+                      }
+                    } catch (e) {
+                      setDialogState(() => isUploading = false);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+                  child: const Text("Upload"),
+                ),
+              ],
+            );
+          }
       ),
     );
   }
