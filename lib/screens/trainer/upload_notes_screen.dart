@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../providers/auth_provider.dart';
 import '../../services/database_service.dart';
+import '../../services/cloudinary_service.dart'; // Import your newly minted service
 import 'notepad_screen.dart';
 
 class UploadNotesScreen extends StatelessWidget {
@@ -26,30 +27,30 @@ class UploadNotesScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildOptionCard(
-              context, 
-              "Choose File", 
-              "Upload PDF, PPT, DOC, or Images", 
-              Icons.file_present_rounded, 
+              context,
+              "Choose File",
+              "Upload PDF, PPT, DOC, Videos, or Images",
+              Icons.file_present_rounded,
               const Color(0xFFFF5252),
-              () => _pickAndUploadFile(context),
+                  () => _pickAndUploadFile(context),
             ),
             const SizedBox(height: 20),
             _buildOptionCard(
-              context, 
-              "Create Custom Notes", 
-              "Write notes using rich text editor", 
-              Icons.edit_note_rounded, 
+              context,
+              "Create Custom Notes",
+              "Write notes using rich text editor",
+              Icons.edit_note_rounded,
               Colors.black,
-              () => Navigator.push(context, MaterialPageRoute(builder: (context) => const NotepadScreen())),
+                  () => Navigator.push(context, MaterialPageRoute(builder: (context) => const NotepadScreen())),
             ),
             const SizedBox(height: 20),
             _buildOptionCard(
-              context, 
-              "Share Resource Link", 
-              "Share YouTube or Drive links", 
-              Icons.link_rounded, 
+              context,
+              "Share Resource Link",
+              "Share YouTube or Drive links",
+              Icons.link_rounded,
               const Color(0xFFFF5252),
-              () => _showUploadDialog(context, "Link"),
+                  () => _showUploadDialog(context, "Link"),
             ),
           ],
         ),
@@ -70,93 +71,97 @@ class UploadNotesScreen extends StatelessWidget {
 
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'jpg', 'png'],
+      allowedExtensions: ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'jpg', 'png', 'mp4', 'mkv'],
       withData: kIsWeb,
     );
 
-    if (result != null) {
-      if (kIsWeb) {
-        if (result.files.single.bytes != null) {
-          _showUploadProgressDialog(context, result.files.single.bytes, result.files.single.name);
-        }
-      } else {
-        if (result.files.single.path != null) {
-          _showUploadProgressDialog(context, File(result.files.single.path!), result.files.single.name);
-        }
-      }
+    if (result != null && result.files.single.path != null) {
+      // Direct pass to Cloudinary processing pipeline
+      _showUploadProgressDialog(context, File(result.files.single.path!), result.files.single.name);
     }
   }
 
-  void _showUploadProgressDialog(BuildContext context, dynamic fileData, String fileName) {
-    final titleController = TextEditingController(text: fileName);
+  void _showUploadProgressDialog(BuildContext context, File localFile, String fileName) {
+    final titleController = TextEditingController(text: fileName.split('.').first);
     final branchController = TextEditingController();
     final auth = Provider.of<UserAuthProvider>(context, listen: false);
     if (auth.trainerModel != null) branchController.text = auth.trainerModel!.branch;
 
     showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        bool isUploading = false;
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text("Upload File"),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!isUploading) ...[
-                    TextField(controller: titleController, decoration: const InputDecoration(labelText: "File Title")),
-                    TextField(controller: branchController, decoration: const InputDecoration(labelText: "Branch or Course Name")),
-                  ] else ...[
-                    const CircularProgressIndicator(color: Color(0xFFFF5252)),
-                    const SizedBox(height: 10),
-                    const Text("Uploading file..."),
-                  ]
-                ],
-              ),
-              actions: isUploading ? [] : [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (titleController.text.isEmpty) return;
-                    
-                    setDialogState(() => isUploading = true);
-                    try {
-                      final downloadUrl = await DatabaseService().uploadFile(
-                        fileData,
-                        'notes',
-                        fileName: "${DateTime.now().millisecondsSinceEpoch}_$fileName",
-                      );
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          bool isUploading = false;
+          return StatefulBuilder(
+              builder: (context, setDialogState) {
+                return AlertDialog(
+                  title: const Text("Upload to Cloudinary"),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!isUploading) ...[
+                        TextField(controller: titleController, decoration: const InputDecoration(labelText: "Resource Title")),
+                        TextField(controller: branchController, decoration: const InputDecoration(labelText: "Branch or Course Name")),
+                      ] else ...[
+                        const CircularProgressIndicator(color: Color(0xFFFF5252)),
+                        const SizedBox(height: 15),
+                        const Text("Streaming media directly to secure servers..."),
+                      ]
+                    ],
+                  ),
+                  actions: isUploading ? [] : [
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+                    ElevatedButton(
+                      onPressed: () async {
+                        if (titleController.text.trim().isEmpty) return;
 
-                      final lectureData = {
-                        'title': titleController.text,
-                        'type': 'file',
-                        'url': downloadUrl,
-                        'branch': branchController.text.trim(),
-                        'date': DateTime.now().toIso8601String(),
-                        'trainerId': auth.trainerModel?.uid ?? '',
-                      };
-                      await DatabaseService().postLecture(lectureData);
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("File uploaded successfully!")));
-                      }
-                    } catch (e) {
-                      setDialogState(() => isUploading = false);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
-                      }
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
-                  child: const Text("Upload"),
-                ),
-              ],
-            );
-          }
-        );
-      }
+                        setDialogState(() => isUploading = true);
+                        try {
+                          // 1. Detect extension structure to split image/video/raw resource rules
+                          bool isVideo = fileName.endsWith('.mp4') || fileName.endsWith('.mkv');
+
+                          // 2. Dispatch the actual payload to your working Cloudinary client configuration
+                          final String? secureDownloadUrl = await CloudinaryService.uploadMedia(localFile);
+
+                          if (secureDownloadUrl == null) {
+                            throw Exception("Cloudinary server upload rejected file properties.");
+                          }
+
+                          // 3. Save the resulting public asset URL string inside your matching Firestore lectures track record
+                          final lectureData = {
+                            'title': titleController.text.trim(),
+                            'type': isVideo ? 'recorded' : 'file',
+                            'url': secureDownloadUrl,
+                            'branch': branchController.text.trim().isEmpty ? 'all' : branchController.text.trim(),
+                            'date': DateTime.now().toIso8601String(),
+                            'trainerId': auth.trainerModel?.uid ?? '',
+                          };
+
+                          await DatabaseService().postLecture(lectureData);
+
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Resource uploaded successfully to Cloudinary! 🎉")),
+                            );
+                          }
+                        } catch (e) {
+                          setDialogState(() => isUploading = false);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text("Upload Failed: ${e.toString()}"), backgroundColor: Colors.red),
+                            );
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+                      child: const Text("Upload"),
+                    ),
+                  ],
+                );
+              }
+          );
+        }
     );
   }
 
@@ -175,76 +180,70 @@ class UploadNotesScreen extends StatelessWidget {
       context: context,
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          bool isUploading = false;
-          return AlertDialog(
-            title: Text("Add $type"),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!isUploading) ...[
-                  TextField(controller: titleController, decoration: const InputDecoration(labelText: "Title")),
-                  TextField(
-                    controller: linkController, 
-                    decoration: InputDecoration(labelText: type == "Link" ? "URL" : "File URL"),
-                  ),
-                  TextField(controller: branchController, decoration: const InputDecoration(labelText: "Branch")),
-                ] else ...[
-                  const CircularProgressIndicator(color: Color(0xFFFF5252)),
-                  const SizedBox(height: 10),
-                  const Text("Sharing resource..."),
-                ]
-              ],
-            ),
-            actions: isUploading ? [] : [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-              ElevatedButton(
-                onPressed: () async {
-                  if (titleController.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter a title")));
-                    return;
-                  }
-                  if (linkController.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter the URL")));
-                    return;
-                  }
-                  
-                  setDialogState(() => isUploading = true);
-                  try {
-                    final lectureData = {
-                      'title': titleController.text.trim(),
-                      'type': type.toLowerCase(),
-                      'url': linkController.text.trim(),
-                      'branch': branchController.text.trim(),
-                      'date': DateTime.now().toIso8601String(),
-                      'trainerId': trainer?.uid ?? '',
-                    };
-
-                    await DatabaseService().postLecture(lectureData);
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Resource uploaded successfully!")),
-                      );
-                    }
-                  } catch (e) {
-                    setDialogState(() => isUploading = false);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
-                    }
-                  }
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
-                child: const Text("Upload"),
+          builder: (context, setDialogState) {
+            bool isUploading = false;
+            return AlertDialog(
+              title: Text("Add $type"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!isUploading) ...[
+                    TextField(controller: titleController, decoration: const InputDecoration(labelText: "Title")),
+                    TextField(
+                      controller: linkController,
+                      decoration: InputDecoration(labelText: type == "Link" ? "URL" : "File URL"),
+                    ),
+                    TextField(controller: branchController, decoration: const InputDecoration(labelText: "Branch")),
+                  ] else ...[
+                    const CircularProgressIndicator(color: Color(0xFFFF5252)),
+                    const SizedBox(height: 10),
+                    const Text("Sharing resource..."),
+                  ]
+                ],
               ),
-            ],
-          );
-        }
+              actions: isUploading ? [] : [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (titleController.text.trim().isEmpty || linkController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please fill in required fields")));
+                      return;
+                    }
+
+                    setDialogState(() => isUploading = true);
+                    try {
+                      final lectureData = {
+                        'title': titleController.text.trim(),
+                        'type': type.toLowerCase(),
+                        'url': linkController.text.trim(),
+                        'branch': branchController.text.trim().isEmpty ? 'all' : branchController.text.trim(),
+                        'date': DateTime.now().toIso8601String(),
+                        'trainerId': trainer?.uid ?? '',
+                      };
+
+                      await DatabaseService().postLecture(lectureData);
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Resource linked successfully!")),
+                        );
+                      }
+                    } catch (e) {
+                      setDialogState(() => isUploading = false);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+                  child: const Text("Upload"),
+                ),
+              ],
+            );
+          }
       ),
     );
   }
-
-
 
   Widget _buildOptionCard(BuildContext context, String title, String sub, IconData icon, Color color, VoidCallback onTap) {
     return GestureDetector(
@@ -282,4 +281,3 @@ class UploadNotesScreen extends StatelessWidget {
     );
   }
 }
-

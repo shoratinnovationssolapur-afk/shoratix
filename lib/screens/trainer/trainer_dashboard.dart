@@ -32,9 +32,23 @@ class _TrainerDashboardState extends State<TrainerDashboard> {
         title: Image.asset('assets/images/logo.png', height: 35),
         actions: [
           IconButton(
-            onPressed: () => auth.signOut(),
-            icon: const Icon(Icons.logout_rounded, color: Colors.black, size: 22),
-          ),
+            onPressed: () async {
+              await auth.signOut();
+
+              if (context.mounted) {
+                Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  AppRoutes.login,
+                      (route) => false,
+                );
+              }
+            },
+            icon: const Icon(
+              Icons.logout_rounded,
+              color: Colors.black,
+              size: 22,
+            ),
+          )
         ],
       ),
       body: trainer == null 

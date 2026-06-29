@@ -58,14 +58,30 @@ class LecturesScreen extends StatelessWidget {
 
   Widget _lectureCard(BuildContext context, Map<String, dynamic> lecture) {
     final url = lecture['url'] ?? '';
-    String thumbnailUrl = "https://img.youtube.com/vi/placeholder/0.jpg";
-    
-    // Try to extract YouTube ID for thumbnail
+    String thumbnailUrl = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=600&auto=format&fit=crop"; // Better fallback default
+
+    // 1. Check if it's a YouTube URL
     if (url.contains('youtube.com') || url.contains('youtu.be')) {
       final regExp = RegExp(r"(?:v=|\/)([0-9A-Za-z_-]{11})");
       final match = regExp.firstMatch(url);
       if (match != null) {
         thumbnailUrl = "https://img.youtube.com/vi/${match.group(1)}/0.jpg";
+      }
+    }
+    // 2. Check if it's a Cloudinary Video URL
+    else if (url.contains('res.cloudinary.com') && url.contains('/video/upload/')) {
+      // Cloudinary trick: Changing '/video/upload/' to '/video/upload/w_600,h_340,c_fill/'
+      // and swapping the extension from .mp4/.mkv to .jpg automatically generates a high-quality video thumbnail!
+      try {
+        String baseUrl = url.replaceAll('/video/upload/', '/video/upload/w_600,h_340,c_fill/');
+        int lastDotIndex = baseUrl.lastIndexOf('.');
+        if (lastDotIndex != -1) {
+          thumbnailUrl = baseUrl.substring(0, lastDotIndex) + '.jpg';
+        } else {
+          thumbnailUrl = baseUrl + '.jpg';
+        }
+      } catch (e) {
+        print("Error creating Cloudinary thumbnail: $e");
       }
     }
 
@@ -122,10 +138,10 @@ class LecturesScreen extends StatelessWidget {
                       const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
                       const SizedBox(width: 5),
                       Text(
-                        lecture['date'] != null 
-                          ? (lecture['date'] as String).split('T')[0]
-                          : "Unknown", 
-                        style: const TextStyle(color: Colors.grey, fontSize: 12)
+                          lecture['date'] != null
+                              ? (lecture['date'] as String).split('T')[0]
+                              : "Unknown",
+                          style: const TextStyle(color: Colors.grey, fontSize: 12)
                       ),
                     ],
                   ),
