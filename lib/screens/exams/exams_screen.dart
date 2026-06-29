@@ -5,7 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/database_service.dart';
 import '../../models/trainer_model.dart';
-
 import 'take_test_screen.dart';
 
 class ExamsScreen extends StatelessWidget {
@@ -14,58 +13,59 @@ class ExamsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<UserAuthProvider>(context);
-    final db = DatabaseService();
     final student = auth.studentModel;
+    final db = DatabaseService();
+
+    if (student == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    final List<String> interests = ['all', student.branch, ...student.enrolledCourses].toSet().toList();
 
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF8F9FA),
+        backgroundColor: Colors.white,
         appBar: AppBar(
-          title: const Text("Tests & Exams", style: TextStyle(fontWeight: FontWeight.w900)),
+          title: const Text("Tests & Exams", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
           backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
           elevation: 0,
+          iconTheme: const IconThemeData(color: Colors.black),
           bottom: const TabBar(
             labelColor: Color(0xFFFF5252),
             unselectedLabelColor: Colors.grey,
             indicatorColor: Color(0xFFFF5252),
-            indicatorWeight: 3,
             tabs: [
-              Tab(text: "Upcoming Tests"),
-              Tab(text: "Past Tests"),
+              Tab(text: "Upcoming"),
+              Tab(text: "Finished"),
             ],
           ),
         ),
         body: TabBarView(
           children: [
-            _buildTestsList(db, student, true),
-            _buildTestsList(db, student, false),
+            _buildTestsList(db, interests, true),
+            _buildTestsList(db, interests, false),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTestsList(DatabaseService db, dynamic user, bool isUpcoming) {
-    final List<String> interests = ['all'];
-    if (user != null) {
-      if (user.branch != null && user.branch.isNotEmpty) interests.add(user.branch);
-      if (user.enrolledCourses != null) interests.addAll(List<String>.from(user.enrolledCourses));
-    }
-    final List<String> finalInterests = interests.toSet().toList();
-
+  Widget _buildTestsList(DatabaseService db, List<String> interests, bool isUpcoming) {
     return StreamBuilder<List<HubEvent>>(
-      stream: db.getEvents(finalInterests),
+      stream: db.getEvents(interests),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: Color(0xFFFF5252)));
         }
 
         final now = DateTime.now();
-        final List<HubEvent> tests = (snapshot.data ?? [])
-            .where((e) => e.type == 'test')
-            .where((e) => isUpcoming ? e.dateTime.isAfter(now) : e.dateTime.isBefore(now))
+        // A test is "Upcoming" if it is completed (posted) and the time hasn't passed or it's within range
+        final tests = (snapshot.data ?? [])
+            .where((e) => e.type == 'test' && e.isCompleted)
+            .where((e) => isUpcoming 
+                ? e.dateTime.add(const Duration(hours: 4)).isAfter(now) 
+                : e.dateTime.add(const Duration(hours: 4)).isBefore(now))
             .toList();
 
         if (tests.isEmpty) {
@@ -73,11 +73,11 @@ class ExamsScreen extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.assignment_outlined, size: 64, color: Colors.grey[300]),
+                Icon(Icons.assignment_turned_in_rounded, size: 64, color: Colors.grey[200]),
                 const SizedBox(height: 16),
                 Text(
-                  isUpcoming ? "No upcoming tests scheduled." : "No past tests found.",
-                  style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w600),
+                  isUpcoming ? "No upcoming exams found." : "No finished exams found.",
+                  style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -85,101 +85,71 @@ class ExamsScreen extends StatelessWidget {
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           itemCount: tests.length,
-          itemBuilder: (context, index) {
-            final test = tests[index];
-            return _testCard(context, test, isUpcoming);
-          },
+          itemBuilder: (context, index) => _testCard(context, tests[index], isUpcoming),
         );
       },
     );
   }
 
   Widget _testCard(BuildContext context, HubEvent test, bool isUpcoming) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 15.0),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: Colors.grey.withValues(alpha: 0.1)),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, 5))],
+        border: Border.all(color: Colors.grey[100]!),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: (isUpcoming ? Colors.orange : Colors.green).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    isUpcoming ? "UPCOMING" : "COMPLETED",
-                    style: TextStyle(
-                      color: isUpcoming ? Colors.orange : Colors.green,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 10,
-                      letterSpacing: 1,
-                    ),
-                  ),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: const Color(0xFFFF5252).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(15)),
+                  child: const Icon(Icons.quiz_rounded, color: Color(0xFFFF5252)),
                 ),
-                Text(
-                  DateFormat('MMM d, yyyy').format(test.dateTime),
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(test.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                      Text(
+                        "${DateFormat('MMM d, hh:mm a').format(test.dateTime)} • ${test.questions.length} Qs",
+                        style: const TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 15),
-            Text(
-              test.title,
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              test.description,
-              style: TextStyle(color: Colors.grey[600], fontSize: 13),
-            ),
-            const SizedBox(height: 15),
-            Row(
-              children: [
-                const Icon(Icons.access_time_filled, size: 16, color: Color(0xFFFF5252)),
-                const SizedBox(width: 8),
-                Text(
-                  DateFormat('hh:mm a').format(test.dateTime),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          if (isUpcoming)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => TakeTestScreen(test: test)),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  elevation: 0,
                 ),
-                const Spacer(),
-                if (isUpcoming)
-                  ElevatedButton(
-                    onPressed: () async {
-                      if (test.meetLink.isNotEmpty) {
-                        final uri = Uri.parse(test.meetLink);
-                        if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
-                        }
-                      } else {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => TakeTestScreen(test: test)),
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    child: Text(test.meetLink.isNotEmpty ? "OPEN LINK" : "START TEST", style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-              ],
+                child: const Text("START TEST", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
+              ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }

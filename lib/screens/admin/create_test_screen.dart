@@ -14,6 +14,7 @@ class _CreateTestScreenState extends State<CreateTestScreen> {
   final List<TestQuestion> _questions = [];
   final _questionController = TextEditingController();
   final DatabaseService _db = DatabaseService();
+  bool _isPosting = false;
 
   void _addQuestion() {
     if (_questionController.text.isEmpty) return;
@@ -31,158 +32,183 @@ class _CreateTestScreenState extends State<CreateTestScreen> {
 
   Future<void> _finishTest() async {
     if (_questions.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Add at least one question")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please add at least one question"), backgroundColor: Colors.orange)
+      );
       return;
     }
 
-    final updatedEvent = HubEvent(
-      id: widget.event.id,
-      title: widget.event.title,
-      description: widget.event.description,
-      dateTime: widget.event.dateTime,
-      type: widget.event.type,
-      branch: widget.event.branch,
-      meetLink: widget.event.meetLink,
-      questions: _questions,
-      isCompleted: true,
-    );
+    setState(() => _isPosting = true);
 
-    await _db.scheduleEvent(updatedEvent);
-    if (mounted) {
-      Navigator.pop(context);
+    try {
+      final updatedEvent = HubEvent(
+        id: widget.event.id,
+        title: widget.event.title,
+        description: widget.event.description,
+        dateTime: widget.event.dateTime,
+        type: widget.event.type,
+        branch: widget.event.branch,
+        meetLink: widget.event.meetLink,
+        questions: _questions,
+        isCompleted: true,
+      );
+
+      await _db.scheduleEvent(updatedEvent);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Test Paper Posted Successfully!"), backgroundColor: Colors.green)
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to post: ${e.toString()}"), backgroundColor: Colors.red)
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isPosting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text("Create Test: ${widget.event.title}", style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("Create Question Paper", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header Info
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.black,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(25),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 15, offset: const Offset(0, 8))],
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.assignment_add, color: Color(0xFFFF5252), size: 30),
+                  const CircleAvatar(
+                    backgroundColor: Color(0xFFFF5252),
+                    child: Icon(Icons.quiz_rounded, color: Colors.white),
+                  ),
                   const SizedBox(width: 15),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("Step 2: Add Questions", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                      Text("Questions Added: ${_questions.length}", style: const TextStyle(color: Colors.grey, fontSize: 13)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 30),
-            
-            const Text("ADD NEW QUESTION", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 2, color: Colors.black54)),
-            const SizedBox(height: 15),
-            
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white, 
-                borderRadius: BorderRadius.circular(25),
-                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15, offset: Offset(0, 5))],
-              ),
-              child: Column(
-                children: [
-                  TextField(
-                    controller: _questionController,
-                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-                    decoration: InputDecoration(
-                      labelText: "Question Description",
-                      labelStyle: const TextStyle(color: Colors.black54),
-                      hintText: "Enter the question here...",
-                      hintStyle: const TextStyle(color: Colors.grey),
-                      alignLabelWithHint: true,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
-                    ),
-                    maxLines: 4,
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton.icon(
-                    onPressed: _addQuestion,
-                    icon: const Icon(Icons.add_circle_outline),
-                    label: const Text("ADD TO PAPER", style: TextStyle(fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF5252),
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 55),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            const SizedBox(height: 40),
-            if (_questions.isNotEmpty) ...[
-              const Text("QUESTION PAPER PREVIEW", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 2, color: Colors.black54)),
-              const SizedBox(height: 15),
-              ..._questions.asMap().entries.map((entry) {
-                int idx = entry.key;
-                TestQuestion q = entry.value;
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Question ${idx + 1}", style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFFFF5252), fontSize: 12)),
-                        const SizedBox(height: 8),
-                        Text(q.question, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black)),
-                        const SizedBox(height: 15),
-                        Container(
-                          height: 40,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.grey[300]!),
-                          ),
-                          alignment: Alignment.centerLeft,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: const Text("Student response space will appear here", style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic)),
-                        ),
+                        Text(widget.event.title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text("Branch: ${widget.event.branch} • Questions: ${_questions.length}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
                       ],
                     ),
                   ),
-                );
-              }),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 35),
+            
+            const Text("ADD NEW QUESTION", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 2, color: Colors.grey)),
+            const SizedBox(height: 15),
+            
+            TextField(
+              controller: _questionController,
+              style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
+              maxLines: 4,
+              decoration: InputDecoration(
+                hintText: "Write your question here...",
+                filled: true,
+                fillColor: Colors.grey[100],
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: Color(0xFFFF5252), width: 1.5)),
+              ),
+            ),
+            
+            const SizedBox(height: 20),
+            
+            ElevatedButton.icon(
+              onPressed: _addQuestion,
+              icon: const Icon(Icons.add_circle_outline),
+              label: const Text("ADD TO PAPER", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF5252),
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 55),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                elevation: 5,
+              ),
+            ),
+            
+            const SizedBox(height: 40),
+            
+            if (_questions.isNotEmpty) ...[
+              const Text("QUESTION PAPER PREVIEW", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 2, color: Colors.grey)),
+              const SizedBox(height: 15),
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _questions.length,
+                itemBuilder: (context, index) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.grey[200]!),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text("Question ${index + 1}", style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFFFF5252), fontSize: 12)),
+                            const Spacer(),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 18),
+                              onPressed: () => setState(() => _questions.removeAt(index)),
+                            ),
+                          ],
+                        ),
+                        Text(_questions[index].question, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black)),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ],
             
             const SizedBox(height: 40),
-            ElevatedButton(
-              onPressed: _finishTest,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black, 
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 60),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                elevation: 10,
-                shadowColor: Colors.black.withValues(alpha: 0.4),
+            
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(25),
+                gradient: const LinearGradient(colors: [Color(0xFFFF5252), Color(0xFFD32F2F)]),
+                boxShadow: [BoxShadow(color: const Color(0xFFFF5252).withValues(alpha: 0.3), blurRadius: 15, offset: const Offset(0, 5))],
               ),
-              child: const Text("POST QUESTION PAPER", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1)),
+              child: ElevatedButton(
+                onPressed: _isPosting ? null : _finishTest,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  foregroundColor: Colors.white,
+                  shadowColor: Colors.transparent,
+                  minimumSize: const Size(double.infinity, 65),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                ),
+                child: _isPosting 
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text("POST QUESTION PAPER", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1.5)),
+              ),
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 50),
           ],
         ),
       ),
